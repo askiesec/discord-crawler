@@ -25,11 +25,11 @@ class MessagePrinter:
 
     @staticmethod
     def print_warning(message):
-        print(f"{Fore.YELLOW}{Style.BRIGHT}⚠️  {message}")
+        print(f"{Fore.YELLOW}{Style.BRIGHT}⚠️ {message}")
 
     @staticmethod
     def print_error(message):
-        print(f"{Fore.RED}{Style.BRIGHT}✘  {message}")
+        print(f"{Fore.RED}{Style.BRIGHT}✘ {message}")
 
 
 def banner():
@@ -75,7 +75,7 @@ class DiscordCrawler(commands.Cog):
     def __init__(self, bot, config):
         self.bot = bot
         self.token = config["token"]
-        self.channelid = config["channelid"]
+        self.channelids = config["channelids"]
         self.hook = Webhook(config["hook"])
         self.keywords = config["keywords"]
 
@@ -88,14 +88,16 @@ class DiscordCrawler(commands.Cog):
 
     @commands.Cog.listener()
     async def on_message(self, message):
-        if message.channel.id == self.channelid:
+        if message.channel.id in self.channelids:
             date_format = "%a, %d %b %Y %I:%M %p"
             profurl = f"https://discordapp.com/users/{message.author.id}"
+            guild_name = message.guild.name
             embed = Embed(color=0x546E7A, timestamp="now")
             embed.set_author(
                 name=f"{message.author}", icon_url=f"{message.author.avatar.url}"
             )
             embed.set_thumbnail(url=f"{message.author.avatar.url}")
+            embed.add_field(name="Server Name", value=guild_name, inline=False)
             embed.add_field(name="User ID", value=message.author.id)
             embed.add_field(name="", value=f"[Profile Link]({profurl})")
             embed.add_field(
@@ -147,7 +149,7 @@ class WebhookCrawler:
             with open("config.json") as f:
                 config = json.load(f)
                 self.token = config["token"]
-                self.channel_id = config["channelid"]
+                self.channel_ids = config["channelids"]
                 self.webhook_url = config["hook"]
                 self.keywords = config["keywords"]
             MessagePrinter.print_success("Config loaded successfully")
