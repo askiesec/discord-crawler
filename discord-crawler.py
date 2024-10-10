@@ -1,21 +1,32 @@
 import discord
 import os
 import json
-import multiprocessing
 import time
 import re
 import asyncio
 import nltk
+import argparse
 from nltk.sentiment import SentimentIntensityAnalyzer
 from discord.ext import commands
 from colorama import Fore, Back, Style, init
 from dhooks import Webhook, Embed
 
+def ensure_config_exists(config_path="config.json"):
+    if not os.path.isfile(config_path):
+        default_config = {
+            "token": "",
+            "channelids": [],
+            "hook": "",
+            "keywords": []
+        }
+        with open(config_path, "w") as config_file:
+            json.dump(default_config, config_file, indent=4)
+        MessagePrinter.print_info(f"Default config created at {config_path}")
+
 init(autoreset=True)
 nltk.download("punkt_tab", quiet=True)
 
 DISCORD_SERVER_REGEX = r"(https?://)?(www\.)?(discord\.(gg|com/invite)/[a-zA-Z0-9]+)"
-
 
 class MessagePrinter:
 
@@ -24,12 +35,23 @@ class MessagePrinter:
         print(f"{Fore.GREEN}{Style.BRIGHT}✅ {message}")
 
     @staticmethod
+    def print_info(message):
+        print(f"{Fore.MAGENTA}{Style.BRIGHT}💡 {message}")
+
+    @staticmethod
     def print_warning(message):
         print(f"{Fore.YELLOW}{Style.BRIGHT}⚠️ {message}")
 
     @staticmethod
     def print_error(message):
         print(f"{Fore.RED}{Style.BRIGHT}✘ {message}")
+
+ensure_config_exists()
+
+parser = argparse.ArgumentParser(description="Discord Selfbot Crawler")
+parser.add_argument("--config", type=str, default="config.json", help="Path to configuration file")
+parser.add_argument("--channelid", required=True, type=str, default="config.json", help="Single channel ID to monitor")
+args = parser.parse_args()
 
 
 def banner():
@@ -70,12 +92,13 @@ def banner():
     """
     )
 
-
-class DiscordCrawler(commands.Cog):
-    def __init__(self, bot, config):
+class DiscordCrawler(commands.Cog,):
+    def __init__(self, bot, config, channelid=None):
         self.bot = bot
         self.token = config["token"]
-        self.channelids = config["channelids"]
+        self.channelids = config.get("channelids", [])
+        if channelid:
+            self.channelids.append(channelid)
         self.hook = Webhook(config["hook"])
         self.keywords = config["keywords"]
 
@@ -84,7 +107,6 @@ class DiscordCrawler(commands.Cog):
         banner()
         MessagePrinter.print_success("Discord Crawler initialize successfully")
         MessagePrinter.print_success(f"Keywords loaded: {self.keywords}")
-
 
     @commands.Cog.listener()
     async def on_message(self, message):
@@ -146,12 +168,20 @@ class WebhookCrawler:
 
     def load_config(self):
         try:
-            with open("config.json") as f:
-                config = json.load(f)
-                self.token = config["token"]
-                self.channel_ids = config["channelids"]
-                self.webhook_url = config["hook"]
-                self.keywords = config["keywords"]
+            if args.config:
+             with open("config.json") as f:
+                 config = json.load(f)
+                 self.token = config["token"]
+                 self.channel_ids = config["channelids"]
+                 if args.channelid:
+                     self.channelids.append(args.channelid)
+                 self.webhook_url = config["hook"]
+                 self.keywords = config["keywords"]
+
+            if not self.token:
+                 raise ValueError("Token is missing in the config.json")
+            if not self.webhook_url:
+                 raise ValueError("Webhook URL is missing in the config.json")
             MessagePrinter.print_success("Config loaded successfully")
         except FileNotFoundError:
             MessagePrinter.print_error("config.json file not found")
@@ -161,7 +191,6 @@ class WebhookCrawler:
             raise
         except KeyError as e:
             MessagePrinter.print_error(f"Missing key in config.json: {e}")
-            raise
         except Exception as e:
             MessagePrinter.print_error(f"Unexpected error loading config.json: {e}")
             raise
@@ -192,5 +221,8 @@ async def main():
 if __name__ == "__main__":
     try:
         asyncio.run(main())
+
     except RuntimeError as e:
         MessagePrinter.print_error(f"Event loop error: {e}")
+    except ValueError as ve:
+        MessagePrinter.print_error(f"Configuration error: {ve}")
